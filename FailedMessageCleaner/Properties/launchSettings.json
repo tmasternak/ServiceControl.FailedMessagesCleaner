@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "FailedMessageCleaner": {
+      "commandName": "Project",
+      "commandLineArgs": "\"C:\\ProgramData\\Particular\\ServiceControl\\Particular.Rabbitmq\\DB\""
+    }
+  }
+}
