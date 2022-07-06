@@ -81,6 +81,8 @@ namespace FailedMessageCleaner
                     ids.AddRange(idsToPrune);
                 }
 
+                if (ids.Count == 0) continue;
+
                 using (var session = store.OpenAsyncSession())
                 {
                     foreach (var id in ids)
