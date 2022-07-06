@@ -58,7 +58,6 @@ namespace FailedMessageCleaner
                 {
                     var page = await session.Advanced
                         .AsyncDocumentQuery<FailureGroupMessageView, FailedMessages_ByGroup>()
-                        .WhereEquals(view => view.FailureGroupId, "919927b1-7983-baf2-2c32-ecc06691beed")
                         .AddOrder("MessageId", true)
                         .Take(pageSize)
                         .Skip(start)
