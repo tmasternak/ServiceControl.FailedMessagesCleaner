@@ -25,7 +25,7 @@ namespace FailedMessageCleaner
             }
 
             var path = args[0]; // @"C:\ProgramData\Particular\ServiceControl\Particular.Rabbitmq\DB";
-            
+
             log.Info($"Connecting to RavenDB instance at {path} ...");
 
             var store = RavenBootstrapper.Setup(path, 33334);
@@ -34,7 +34,6 @@ namespace FailedMessageCleaner
             log.Info($"Connected. Processing FailedMessage documents ...");
 
             await CleanFailedMessages(store).ConfigureAwait(false);
-            
             log.Info($"Clean-up finished press <any key> to exit ...");
             Console.ReadLine();
 
