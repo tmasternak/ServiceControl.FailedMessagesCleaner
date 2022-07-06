@@ -68,6 +68,7 @@ namespace FailedMessageCleaner
 
                     if (page.Count == 0)
                     {
+                        log.Info($"Cleaned up {0} documents.", start);
                         return;
                     }
 
@@ -96,8 +97,6 @@ namespace FailedMessageCleaner
 
                     await session.SaveChangesAsync().ConfigureAwait(false);
                 }
-
-                Console.WriteLine($"Cleaned up {start} documents.");
             }
         }
 
