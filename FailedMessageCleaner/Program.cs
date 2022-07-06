@@ -71,12 +71,13 @@ namespace FailedMessageCleaner
                         return;
                     }
 
-                    start += page.Count;
-
                     var idsToPrune = page
                         .Where(i => i.NumberOfProcessingAttempts > maxAttemptsPerMessage)
-                        .Select(i => i.Id);
-                    
+                        .Select(i => i.Id)
+                        .ToList();
+
+                    start += idsToPrune.Count;
+
                     ids.AddRange(idsToPrune);
                 }
 
