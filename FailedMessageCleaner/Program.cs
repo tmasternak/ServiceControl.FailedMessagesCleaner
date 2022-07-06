@@ -90,7 +90,7 @@ namespace FailedMessageCleaner
                         var message = await session.LoadAsync<FailedMessage>(documentId);
 
                         message.ProcessingAttempts = message.ProcessingAttempts
-                            .OrderBy(pa => pa.AttemptedAt)
+                            .OrderByDescending(pa => pa.AttemptedAt)
                             .Take(maxAttemptsPerMessage)
                             .ToList();
                     }
