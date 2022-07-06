@@ -25,7 +25,7 @@ namespace FailedMessageCleaner
             }
 
             var path = args[0]; // @"C:\ProgramData\Particular\ServiceControl\Particular.Rabbitmq\DB";
-            
+
             log.Info($"Connecting to RavenDB instance at {path} ...");
 
             var store = RavenBootstrapper.Setup(path, 33334);
@@ -34,7 +34,6 @@ namespace FailedMessageCleaner
             log.Info($"Connected. Processing FailedMessage documents ...");
 
             await CleanFailedMessages(store).ConfigureAwait(false);
-            
             log.Info($"Clean-up finished press <any key> to exit ...");
             Console.ReadLine();
 
@@ -58,7 +57,6 @@ namespace FailedMessageCleaner
                 {
                     var page = await session.Advanced
                         .AsyncDocumentQuery<FailureGroupMessageView, FailedMessages_ByGroup>()
-                        .WhereEquals(view => view.FailureGroupId, "919927b1-7983-baf2-2c32-ecc06691beed")
                         .AddOrder("MessageId", true)
                         .Take(pageSize)
                         .Skip(start)
@@ -67,19 +65,23 @@ namespace FailedMessageCleaner
                         .ToListAsync()
                         .ConfigureAwait(false);
 
+                    start += page.Count;
+
                     if (page.Count == 0)
                     {
+                        log.Info($"Cleaned up {0} documents.", start);
                         return;
                     }
 
-                    start += page.Count;
-
                     var idsToPrune = page
                         .Where(i => i.NumberOfProcessingAttempts > maxAttemptsPerMessage)
-                        .Select(i => i.Id);
-                    
+                        .Select(i => i.Id)
+                        .ToList();
+
                     ids.AddRange(idsToPrune);
                 }
+
+                if (ids.Count == 0) continue;
 
                 using (var session = store.OpenAsyncSession())
                 {
@@ -88,16 +90,16 @@ namespace FailedMessageCleaner
                         var documentId = FailedMessage.MakeDocumentId(id);
                         var message = await session.LoadAsync<FailedMessage>(documentId);
 
+                        log.Info("Processing: {0} truncating {1} processed attempts ", id, message.ProcessingAttempts.Count);
+
                         message.ProcessingAttempts = message.ProcessingAttempts
-                            .OrderBy(pa => pa.AttemptedAt)
+                            .OrderByDescending(pa => pa.AttemptedAt)
                             .Take(maxAttemptsPerMessage)
                             .ToList();
                     }
 
                     await session.SaveChangesAsync().ConfigureAwait(false);
                 }
-
-                Console.WriteLine($"Cleaned up {start} documents.");
             }
         }
 
