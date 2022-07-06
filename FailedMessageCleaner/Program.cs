@@ -65,6 +65,8 @@ namespace FailedMessageCleaner
                         .ToListAsync()
                         .ConfigureAwait(false);
 
+                    start += page.Count;
+
                     if (page.Count == 0)
                     {
                         log.Info($"Cleaned up {0} documents.", start);
@@ -75,8 +77,6 @@ namespace FailedMessageCleaner
                         .Where(i => i.NumberOfProcessingAttempts > maxAttemptsPerMessage)
                         .Select(i => i.Id)
                         .ToList();
-
-                    start += idsToPrune.Count;
 
                     ids.AddRange(idsToPrune);
                 }
