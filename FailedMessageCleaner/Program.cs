@@ -89,6 +89,8 @@ namespace FailedMessageCleaner
                         var documentId = FailedMessage.MakeDocumentId(id);
                         var message = await session.LoadAsync<FailedMessage>(documentId);
 
+                        log.Info("Processing: {0} truncating {1} processed attempts ", id, message.ProcessingAttempts.Count);
+
                         message.ProcessingAttempts = message.ProcessingAttempts
                             .OrderByDescending(pa => pa.AttemptedAt)
                             .Take(maxAttemptsPerMessage)
