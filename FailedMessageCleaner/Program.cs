@@ -5,10 +5,9 @@ using System.Threading.Tasks;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
+using Raven.Client.Document;
 using Raven.Client.Embedded;
 using ServiceControl.MessageFailures;
-using ServiceControl.MessageFailures.Api;
-using ServiceControl.Recoverability;
 
 namespace FailedMessageCleaner
 {
@@ -29,6 +28,7 @@ namespace FailedMessageCleaner
             log.Info($"Connecting to RavenDB instance at {path} ...");
 
             var store = RavenBootstrapper.Setup(path, 33334);
+            store.Conventions.DefaultQueryingConsistency = ConsistencyOptions.AlwaysWaitForNonStaleResultsAsOfLastWrite;
             store.Initialize();
 
             log.Info($"Connected. Processing FailedMessage documents ...");
@@ -53,44 +53,25 @@ namespace FailedMessageCleaner
             {
                 ids.Clear();
 
-                using (var session = store.OpenAsyncSession())
+                using (var session = store.OpenSession())
                 {
-                    var page = await session.Advanced
-                        .AsyncDocumentQuery<FailureGroupMessageView, FailedMessages_ByGroup>()
-                        .AddOrder("MessageId", true)
+                    var messages = session
+                        .Query<FailedMessage>()
+                        .Where(x => x.ProcessingAttempts.Count > maxAttemptsPerMessage)
                         .Take(pageSize)
-                        .Skip(start)
-                        .SetResultTransformer(new FailedMessageViewTransformer().TransformerName)
-                        .SelectFields<FailedMessageView>()
-                        .ToListAsync()
-                        .ConfigureAwait(false);
+                        .ToList();
 
-                    start += page.Count;
+                    start += messages.Count;
 
-                    if (page.Count == 0)
+                    if (messages.Count == 0)
                     {
-                        log.Info($"Cleaned up {0} documents.", start);
+                        log.Info("Scanned {0:N0} documents.", start);
                         return;
                     }
 
-                    var idsToPrune = page
-                        .Where(i => i.NumberOfProcessingAttempts > maxAttemptsPerMessage)
-                        .Select(i => i.Id)
-                        .ToList();
-
-                    ids.AddRange(idsToPrune);
-                }
-
-                if (ids.Count == 0) continue;
-
-                using (var session = store.OpenAsyncSession())
-                {
-                    foreach (var id in ids)
+                    foreach (var message in messages)
                     {
-                        var documentId = FailedMessage.MakeDocumentId(id);
-                        var message = await session.LoadAsync<FailedMessage>(documentId);
-
-                        log.Info("Processing: {0} truncating {1} processed attempts ", id, message.ProcessingAttempts.Count);
+                        log.Info("Processing: {0} truncating {1:N0} processed attempts ", message.UniqueMessageId, message.ProcessingAttempts.Count);
 
                         message.ProcessingAttempts = message.ProcessingAttempts
                             .OrderByDescending(pa => pa.AttemptedAt)
@@ -98,19 +79,19 @@ namespace FailedMessageCleaner
                             .ToList();
                     }
 
-                    await session.SaveChangesAsync().ConfigureAwait(false);
+                    session.SaveChanges();
                 }
             }
         }
-
         static void ConfigureLogging()
         {
             var config = new LoggingConfiguration();
             var consoleTarget = new ConsoleTarget
             {
                 Name = "console",
-                Layout = "${longdate}|${level:uppercase=true}|${logger}|${message}",
+                Layout = "${processtime}|${level:uppercase=true}|${message}",
             };
+
             config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget, "*");
 
             LogManager.Configuration = config;
