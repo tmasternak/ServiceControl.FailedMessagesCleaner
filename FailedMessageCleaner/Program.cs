@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
 using Raven.Client.Document;
 using Raven.Client.Embedded;
+using Raven.Database.Storage.Esent.Debug;
 using ServiceControl.MessageFailures;
 
 namespace FailedMessageCleaner
@@ -23,21 +26,52 @@ namespace FailedMessageCleaner
                 return;
             }
 
+            Console.WriteLine("ONLY RUN THIS WHILE SERVICECONTROL IS NOT RUNNING");
+
+            Console.WriteLine("Type YES if ServiceControl is NOT running and if registered as a Windows service is set to DISABLED to prevent it from starting due to system service recovery features.");
+
+            Console.Write("Input: ");
+            var result = Console.ReadLine();
+
+            if (result != "YES")
+            {
+                Console.WriteLine($"Exiting as result was not equal to YES but '{result}'");
+                return;
+            }
+
             var path = args[0]; // @"C:\ProgramData\Particular\ServiceControl\Particular.Rabbitmq\DB";
 
             log.Info($"Connecting to RavenDB instance at {path} ...");
 
-            var store = RavenBootstrapper.Setup(path, 33334);
-            store.Conventions.DefaultQueryingConsistency = ConsistencyOptions.AlwaysWaitForNonStaleResultsAsOfLastWrite;
-            store.Initialize();
+            try
+            {
+                using var store = RavenBootstrapper.Setup(path, 33334);
+#pragma warning disable CS0618 // Type or member is obsolete
+                store.Conventions.DefaultQueryingConsistency = ConsistencyOptions.AlwaysWaitForNonStaleResultsAsOfLastWrite;
+#pragma warning restore CS0618 // Type or member is obsolete
+                store.Initialize();
 
-            log.Info($"Connected. Processing FailedMessage documents ...");
+                log.Info($"Connected. Processing FailedMessage documents ...");
 
-            await CleanFailedMessages(store).ConfigureAwait(false);
+                await CleanFailedMessages(store).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                log.Error($"""
+                    An unexpected error occured: {ex.Message} ({ex.GetType()}) [Exception hash: {CreateMD5(ex.ToString())}]
+                    
+                    Please run again!
+                    
+                    If the error persists try to repair the database as follows:
+
+                        esentutl / r RVN / l "logs"
+                        esentutl / p Data
+
+                    Contact Particular Software at support@particular.net for assistance.
+                    """);
+            }
             log.Info($"Clean-up finished press <any key> to exit ...");
             Console.ReadLine();
-
-            store.Dispose();
         }
 
         static async Task CleanFailedMessages(EmbeddableDocumentStore store)
@@ -97,6 +131,22 @@ namespace FailedMessageCleaner
             LogManager.Configuration = config;
         }
 
+        static string CreateMD5(string input)
+        {
+            // Use input string to calculate MD5 hash
+            using (System.Security.Cryptography.MD5 md5 = System.Security.Cryptography.MD5.Create())
+            {
+                byte[] inputBytes = System.Text.Encoding.ASCII.GetBytes(input);
+                byte[] hashBytes = md5.ComputeHash(inputBytes);
+
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < hashBytes.Length; i++)
+                {
+                    sb.Append(hashBytes[i].ToString("X2"));
+                }
+                return sb.ToString();
+            }
+        }
         static Logger log = LogManager.GetCurrentClassLogger();
     }
 }
